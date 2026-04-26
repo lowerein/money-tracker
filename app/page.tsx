@@ -19,16 +19,18 @@ export default async function Home({
   // ==============================
   // 1. 處理月份邏輯 (鋼鐵級防護)
   // ==============================
+// 🌟 修正 2：在使用 searchParams 之前必須先 await 它
+  const resolvedSearchParams = await searchParams;
+  
   const now = new Date()
   
-  // 解析年份
-  let year = parseInt(searchParams.year || "")
+  // 使用解開後的 resolvedSearchParams 進行解析
+  let year = parseInt(resolvedSearchParams.year || "")
   if (isNaN(year) || year < 1900 || year > 2100) {
     year = now.getFullYear()
   }
 
-  // 解析月份 (0-11)
-  let month = parseInt(searchParams.month || "")
+  let month = parseInt(resolvedSearchParams.month || "")
   if (isNaN(month) || month < 0 || month > 11) {
     month = now.getMonth()
   }
