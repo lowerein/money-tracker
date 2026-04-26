@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js" // 最新 Prisma 7 Wasm 引擎
+}
+
+datasource db {
+  provider = "postgresql"
+  // 無需 url，連線已經由 adapter 同 config 接管
+}
+
+// ==============================
+// NextAuth 必須嘅 Models
+// ==============================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  
+  // 關聯到記帳 App 嘅 Models
+  expenses      Expense[]
+  categories    Category[]
+}
+
+// ==============================
+// 記帳 App 核心 Models
+// ==============================
+
+// 自定義分類
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  color     String
+  emoji     String    @default("📌") // <--- 加入呢行 (加 default 以防舊資料出錯)
+  userId    String
+  createdAt DateTime  @default(now())
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+}
+
+// 每日開支
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Float    // 金額
+  description String?  // 備註
+  date        DateTime // 開支日期 (因為 User 可能補記之前嘅數)
+  
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, date]) // 加快按月份/日子查詢嘅 Database 效能
+}
