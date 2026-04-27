@@ -201,28 +201,41 @@ export async function logHabitProgress(habitId: string, date: Date, value: numbe
     const session = await auth()
     if (!session?.user?.id) return { success: false, error: "請先登入" }
 
-    // 強制設定為當日凌晨 00:00:00
-    const logDate = new Date(date)
+    // 強制設定時間為當日凌晨 00:00:00
+// 🌟 強制鎖死做香港時間 (Asia/Hong_Kong) 嘅凌晨 00:00:00
+    // 用 en-CA 會安全輸出 YYYY-MM-DD 格式
+    const hkDateStr = new Date(date).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" })
+    
+    // 加上 +08:00 確保 Prisma 存入資料庫時識得自動計返啱個鐘數
+    const logDate = new Date(`${hkDateStr}T00:00:00+08:00`)
     logDate.setHours(0, 0, 0, 0)
 
-    // 🌟 唔好做 if (value <= 0) 判斷
-    // 無論係 0 定係 100，一律用 upsert 確保資料庫有一條明確嘅紀錄
-    await prisma.habitLog.upsert({
+    // 🌟 終極防彈寫法：先搵出今日有無紀錄
+    const existingLog = await prisma.habitLog.findFirst({
       where: {
-        date_habitId_userId: {
-          date: logDate,
-          habitId,
-          userId: session.user.id
-        }
-      },
-      update: { value },
-      create: {
+        habitId: habitId,
         date: logDate,
-        value,
-        habitId,
         userId: session.user.id
       }
     })
+
+    if (existingLog) {
+      // 如果有，就用原生 ID 去 Update，保證 100% 成功
+      await prisma.habitLog.update({
+        where: { id: existingLog.id },
+        data: { value: value }
+      })
+    } else {
+      // 如果無，就 Create 一條新嘅
+      await prisma.habitLog.create({
+        data: {
+          value: value,
+          date: logDate,
+          habitId: habitId,
+          userId: session.user.id
+        }
+      })
+    }
 
     revalidatePath("/")
     return { success: true }
@@ -231,7 +244,6 @@ export async function logHabitProgress(habitId: string, date: Date, value: numbe
     return { success: false, error: "打卡失敗" }
   }
 }
-
 
 
 // ==============================

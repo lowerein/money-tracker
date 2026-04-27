@@ -32,7 +32,11 @@ export default async function Home({
   // ==============================
   // 1. 處理日期邏輯 (鋼鐵級防護)
   // ==============================
-  const now = new Date();
+  const newDay = new Date();
+  const hkTodayStr = newDay.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+  });
+  const now = new Date(`${hkTodayStr}T00:00:00+08:00`);
 
   // 解析年份
   let year = parseInt(resolvedSearchParams.year || "");
