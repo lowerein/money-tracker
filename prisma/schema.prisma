@@ -78,9 +78,12 @@ model Category {
   color     String    @default("#3b82f6")
   emoji     String    @default("📌")
   userId    String
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt @default(now())
+
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expenses  Expense[]
-  createdAt DateTime  @default(now())
 }
 
 model Expense {

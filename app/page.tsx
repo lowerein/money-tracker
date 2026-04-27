@@ -1,8 +1,9 @@
 import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 
-// 引入相對路徑組件
+// 引入組件
 import ExpenseForm from "./components/ExpenseForm";
 import ExpenseList from "./components/ExpenseList";
 import Dashboard from "./components/Dashboard";
@@ -11,6 +12,8 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import HabitTracker from "./components/HabitTracker";
 import SettingsManager from "./components/SettingsManager";
 import StatsModal from "./components/StatsModal";
+
+// 引入工具函式 (確保路徑正確)
 import { getHKDateString, getSafeDBDate } from "../lib/utils";
 
 export default async function Home({
@@ -27,165 +30,136 @@ export default async function Home({
 }) {
   const session = await auth();
 
-  // 🌟 解開 Promise
+  // 1. 處理 Next.js 15 的非同步 searchParams
   const resolvedSearchParams = await searchParams;
 
   // ==============================
-  // 1. 處理日期邏輯 (鋼鐵級防護)
+  // 2. 處理日期邏輯 (香港時間鋼鐵防護版)
   // ==============================
-  const params = await searchParams;
-  const now = new Date();
-  const hkTodayStr = getHKDateString();
-  const targetDateStr = params.day || hkTodayStr;
-  const targetDate = getSafeDBDate(targetDateStr); // 轉做 Date Object 傳畀組件
+  const hkTodayStr = getHKDateString(); // "YYYY-MM-DD"
+  const [hkY, hkM, hkD] = hkTodayStr.split("-").map(Number);
 
   // 解析年份
   let year = parseInt(resolvedSearchParams.year || "");
   if (isNaN(year) || year < 1900 || year > 2100) {
-    year = now.getFullYear();
+    year = hkY;
   }
 
   // 解析月份 (0-11)
   let month = parseInt(resolvedSearchParams.month || "");
   if (isNaN(month) || month < 0 || month > 11) {
-    month = now.getMonth();
+    month = hkM - 1;
   }
 
   // 解析日期 (0 代表顯示全月)
   let selectedDay = parseInt(resolvedSearchParams.day || "");
   if (isNaN(selectedDay) || selectedDay < 0 || selectedDay > 31) {
-    selectedDay = 0;
+    // 如果目前月份是香港今個月，預設選中「今日」，否則預設「0」(全月)
+    if (year === hkY && month === hkM - 1) {
+      selectedDay = hkD;
+    } else {
+      selectedDay = 0;
+    }
   }
 
+  // 決定用於 HabitTracker 的特定日期字串
+  // 如果選了全月(day=0)，HabitTracker 預設顯示 1 號或是今天
+  const habitDay = selectedDay > 0 ? selectedDay : (year === hkY && month === hkM - 1 ? hkD : 1);
+  const targetDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(habitDay).padStart(2, "0")}`;
+  const targetDate = getSafeDBDate(targetDateStr);
+
+  // 分頁邏輯
   let page = parseInt(resolvedSearchParams.page || "1");
   if (isNaN(page) || page < 1) page = 1;
 
-  // 計算導航用的日期物件
   const prevMonthDate = new Date(year, month - 1, 1);
   const nextMonthDate = new Date(year, month + 1, 1);
 
   // ==============================
-  // 2. 獲取分類、習慣與打卡資料
+  // 3. 獲取資料
   // ==============================
   let categories: any[] = [];
   let habits: any[] = [];
   let currentDayLogs: any[] = [];
-  let sharedUsers: any[] = []; // 🌟 朋友清單
-  let viewUserIds: string[] = []; // 🌟 準備要睇嘅 ID
+  let sharedUsers: any[] = [];
   let sharedByMe: any[] = [];
-  // 決定打卡日期：如果有 click 月曆就用 selectedDay，冇就用今日
-  const targetDateForHabit =
-    selectedDay > 0
-      ? new Date(year, month, selectedDay)
-      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let viewUserIds: string[] = [];
 
   if (session?.user?.id) {
-    // 攞分類
+    // A. 分類與習慣 (按 order 排序)
     categories = await prisma.category.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     });
 
-    // 攞習慣
     habits = await prisma.habit.findMany({
       where: { userId: session.user.id },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     });
 
-    // 🌟 搵出授權咗畀我睇嘅朋友
+    // B. 社交/分享邏輯
     const accesses = await prisma.shareAccess.findMany({
       where: { guestId: session.user.id },
       include: { owner: true },
     });
     sharedUsers = accesses.map((a) => a.owner);
 
-    // 🌟 搵出我授權咗畀邊個睇 (我 Share 畀人 -> InviteManager 用)
     const accessesByMe = await prisma.shareAccess.findMany({
       where: { ownerId: session.user.id },
       include: { guest: true },
     });
     sharedByMe = accessesByMe.map((a) => a.guest);
 
-    // 解析 URL 嘅 view 參數，決定睇邊幾個 User 嘅資料
+    // 決定查看對象
     const viewParam = resolvedSearchParams.view;
-    if (viewParam) {
-      viewUserIds = viewParam.split(",");
-    } else {
-      viewUserIds = [session.user.id]; // 預設只睇自己
-    }
+    viewUserIds = viewParam ? viewParam.split(",") : [session.user.id];
 
-    // 攞「目標日期」嘅打卡記錄
-    const targetDateStart = new Date(targetDateForHabit);
-    targetDateStart.setHours(0, 0, 0, 0);
-    const targetDateEnd = new Date(targetDateForHabit);
-    targetDateEnd.setHours(23, 59, 59, 999);
-
+    // C. 獲取選中日期的打卡記錄 (精準 24 小時範圍)
+    const targetDateEnd = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000 - 1);
     currentDayLogs = await prisma.habitLog.findMany({
       where: {
         userId: session.user.id,
-        date: { gte: targetDateStart, lte: targetDateEnd },
+        date: { gte: targetDate, lte: targetDateEnd },
       },
     });
   }
 
-  // ... 其他參數
-  const pageParam = resolvedSearchParams.page;
-
-  // 🌟 加入呢兩行去接收分類參數
-  const catParam = resolvedSearchParams.cat as string | undefined;
-  const selectedCats = catParam ? catParam.split(",") : [];
+  const selectedCats = resolvedSearchParams.cat ? resolvedSearchParams.cat.split(",") : [];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-10 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
+        
         {/* --- Header 頂部欄 --- */}
-        {/* --- Header 頂部欄 (手機/電腦自適應排版) --- */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          {/* 上半部：標題 (手機版會將日月掣放喺右邊) */}
           <div className="flex items-center justify-between md:justify-start w-full md:w-auto gap-4">
             <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
               🎯 Habit Tracker
             </h1>
-
-            {/* 手機版專屬：日月切換掣 */}
             <div className="md:hidden">{session?.user && <ThemeToggle />}</div>
           </div>
 
-          {/* 下半部：操作按鈕與使用者資訊 */}
           {session?.user ? (
             <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3">
-              {/* 左邊：統一系統設定面板 與 統計 */}
               <div className="flex flex-wrap items-center gap-2">
                 <SettingsManager
                   categories={categories}
                   habits={habits}
                   sharedByMe={sharedByMe}
                 />
-                {/* 🌟 引入新嘅統計 Popup */}
                 <StatsModal year={year} month={month} />
               </div>
               <div className="flex items-center gap-3">
-                {/* 電腦版專屬：日月切換掣 (手機版會隱藏，因為移咗去上面) */}
                 <div className="hidden md:block">
                   <ThemeToggle />
                 </div>
-
-                {/* 使用者資訊與登出 */}
-                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 px-3 md:px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
-                  {/* 加入 max-w-[100px] 同 truncate，防止名字太長撐爆排版 */}
-                  <span className="text-xs md:text-sm font-bold text-gray-700 dark:text-gray-200 truncate max-w-[100px] md:max-w-none">
+                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
+                  <span className="text-xs md:text-sm font-bold text-gray-700 dark:text-gray-200 truncate max-w-[100px]">
                     {session.user.name}
                   </span>
-                  <div className="w-px h-3 md:h-4 bg-gray-200 dark:bg-gray-600"></div>
-                  <form
-                    action={async () => {
-                      "use server";
-                      await signOut();
-                    }}
-                  >
-                    <button className="text-xs text-red-500 hover:text-red-400 font-bold transition-all">
-                      登出
-                    </button>
+                  <div className="w-px h-4 bg-gray-200 dark:bg-gray-600"></div>
+                  <form action={async () => { "use server"; await signOut(); }}>
+                    <button className="text-xs text-red-500 hover:text-red-400 font-bold">登出</button>
                   </form>
                 </div>
               </div>
@@ -195,7 +169,8 @@ export default async function Home({
 
         {session?.user ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-            {/* --- 左邊欄：總結與輸入 --- */}
+            
+            {/* --- 左邊欄：Dashboard 與 習慣打卡 --- */}
             <div className="xl:col-span-1 space-y-8">
               <Dashboard userId={session.user.id!} year={year} month={month} />
 
@@ -206,17 +181,18 @@ export default async function Home({
                 <ExpenseForm categories={categories} />
               </div>
 
-              {/* 🌟 習慣打卡區 (放喺 Dashboard 下面) */}
+              {/* 習慣打卡組件：傳入鎖定的 targetDate 與 dateStr */}
               <HabitTracker
                 habits={habits}
                 initialLogs={currentDayLogs}
-                targetDate={targetDateForHabit}
+                targetDate={targetDate}
+                dateStr={targetDateStr}
               />
             </div>
 
             {/* --- 右邊欄：月曆與清單 --- */}
             <div className="xl:col-span-2 space-y-8">
-              {/* 月份切換控制列 */}
+              {/* 月份切換 */}
               <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-2 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
                 <Link
                   href={`/?year=${prevMonthDate.getFullYear()}&month=${prevMonthDate.getMonth()}`}
@@ -224,13 +200,11 @@ export default async function Home({
                 >
                   ◀
                 </Link>
-
                 <div className="text-center">
                   <span className="text-xl font-black text-gray-800 dark:text-gray-100">
                     {year} 年 {month + 1} 月
                   </span>
                 </div>
-
                 <Link
                   href={`/?year=${nextMonthDate.getFullYear()}&month=${nextMonthDate.getMonth()}`}
                   className="px-6 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-400 hover:text-blue-600 font-bold transition-all"
@@ -239,18 +213,18 @@ export default async function Home({
                 </Link>
               </div>
 
-              {/* 月曆視圖 */}
+              {/* 月曆 */}
               <CalendarView
                 userId={session.user.id!}
                 year={year}
                 month={month}
                 selectedDay={selectedDay}
-                viewUserIds={viewUserIds} // 🌟 傳入選擇咗嘅 ID
-                sharedUsers={sharedUsers} // 🌟 傳入朋友清單
+                viewUserIds={viewUserIds}
+                sharedUsers={sharedUsers}
                 currentUser={{ id: session.user.id, name: session.user.name }}
               />
 
-              {/* 詳細列表 */}
+              {/* 帳目列表 */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
                 <div className="p-4 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                   <h3 className="font-bold text-gray-700 dark:text-gray-200">
@@ -274,7 +248,7 @@ export default async function Home({
                   day={selectedDay}
                   page={page}
                   viewUserIds={viewUserIds}
-                  selectedCats={selectedCats} // 🌟 傳入呢行
+                  selectedCats={selectedCats}
                 />
               </div>
             </div>
@@ -283,19 +257,12 @@ export default async function Home({
           /* --- 未登入介面 --- */
           <div className="max-w-md mx-auto text-center py-20 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 mt-20 transition-colors">
             <div className="text-6xl mb-6">🎯</div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              掌控你的人生與財富
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">掌控你的人生與財富</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-8 px-10">
               登入以開始追蹤每日好習慣與開支，透過數據分析成就更好的自己。
             </p>
-            <form
-              action={async () => {
-                "use server";
-                await signIn("google");
-              }}
-            >
-              <button className="px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-bold transition-all shadow-lg shadow-blue-200 dark:shadow-none">
+            <form action={async () => { "use server"; await signIn("google"); }}>
+              <button className="px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-bold transition-all shadow-lg shadow-blue-200">
                 使用 Google 帳號登入
               </button>
             </form>
@@ -303,7 +270,6 @@ export default async function Home({
         )}
       </div>
 
-      {/* 底部裝飾 */}
       <footer className="mt-20 text-center text-gray-300 dark:text-gray-700 text-xs pb-10">
         &copy; {new Date().getFullYear()} Habit Tracker. 數據已加密儲存。
       </footer>

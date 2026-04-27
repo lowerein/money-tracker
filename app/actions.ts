@@ -430,3 +430,26 @@ export async function updateHabitOrder(habitIds: string[]) {
     return { success: false, error: "更新次序失敗" }
   }
 }
+
+// 🌟 更新分類次序
+export async function updateCategoryOrder(categoryIds: string[]) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false }
+
+    await prisma.$transaction(
+      categoryIds.map((id, index) => 
+        prisma.category.update({
+          where: { id: id, userId: session.user?.id },
+          data: { order: index }
+        })
+      )
+    )
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Update Category Order Error:", error)
+    return { success: false, error: "更新次序失敗" }
+  }
+}

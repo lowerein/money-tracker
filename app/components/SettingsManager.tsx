@@ -11,6 +11,7 @@ import {
   revokeShareAccess,
   updateHabit,
   updateHabitOrder,
+  updateCategoryOrder,
 } from "../actions";
 
 export default function SettingsManager({
@@ -85,6 +86,27 @@ export default function SettingsManager({
   const [editHabitTarget, setEditHabitTarget] = useState(1);
   const [editHabitUnit, setEditHabitUnit] = useState("");
   const [localHabits, setLocalHabits] = useState(habits);
+  const [localCategories, setLocalCategories] = useState(categories);
+
+  // 🌟 移動分類功能
+  const moveCategory = async (index: number, direction: "UP" | "DOWN") => {
+    if (direction === "UP" && index === 0) return;
+    if (direction === "DOWN" && index === localCategories.length - 1) return;
+
+    const newList = [...localCategories];
+    const swapIndex = direction === "UP" ? index - 1 : index + 1;
+
+    // 交換位置
+    const temp = newList[index];
+    newList[index] = newList[swapIndex];
+    newList[swapIndex] = temp;
+
+    setLocalCategories(newList); // 即時更新畫面
+
+    // 射去 Server Save
+    const newOrderIds = newList.map((c) => c.id);
+    await updateCategoryOrder(newOrderIds);
+  };
 
   const startEditHabit = (habit: any) => {
     setEditingHabitId(habit.id);
@@ -609,30 +631,55 @@ export default function SettingsManager({
                     <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                       現有清單
                     </h3>
-                    {categories.map((cat) => (
+                    {/* 🌟 1. 改用 localCategories 嚟 map，並加入 index */}
+                    {localCategories.map((cat, index) => (
                       <div
                         key={cat.id}
                         className="flex justify-between p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm"
                       >
                         <div className="flex items-center gap-3">
+                          {/* 🌟 2. 呢度加返排序上下按鈕 */}
+                          <div className="flex flex-col gap-0.5 mr-1">
+                            <button
+                              onClick={() => moveCategory(index, "UP")}
+                              disabled={index === 0 || loading}
+                              className="text-[10px] text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => moveCategory(index, "DOWN")}
+                              disabled={
+                                index === localCategories.length - 1 || loading
+                              }
+                              className="text-[10px] text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                            >
+                              ▼
+                            </button>
+                          </div>
+
+                          {/* 原本嘅顏色圓點與名稱 (保留你嘅原版設計) */}
                           <div
-                            className="w-3 h-3 rounded-full"
+                            className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: cat.color }}
                           ></div>
                           <span className="font-bold text-sm text-gray-700 dark:text-gray-200">
                             {cat.emoji} {cat.name}
                           </span>
                         </div>
-                        <div className="flex gap-2">
+
+                        <div className="flex gap-2 items-center">
+                          {/* 原本嘅 Edit 功能 (保留) */}
                           <button
                             onClick={() => handleEditCat(cat)}
-                            className="text-gray-400 hover:text-blue-500 p-1 text-sm"
+                            className="text-gray-400 hover:text-blue-500 p-1 text-sm transition-colors"
                           >
                             ✏️
                           </button>
+                          {/* 原本嘅 Delete 功能 (保留) */}
                           <button
                             onClick={() => handleDeleteCat(cat.id)}
-                            className="text-gray-400 hover:text-red-500 p-1 text-sm"
+                            className="text-gray-400 hover:text-red-500 p-1 text-sm transition-colors"
                           >
                             🗑️
                           </button>

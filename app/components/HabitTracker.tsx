@@ -186,13 +186,16 @@ export default function HabitTracker({
   habits,
   initialLogs = [],
   targetDate,
+  dateStr, // 🌟 接收呢個字串
 }: {
   habits: any[];
   initialLogs?: any[];
   targetDate: Date;
+  dateStr: string;
 }) {
   if (habits.length === 0) return null;
-
+  const [y, m, d] = dateStr.split("-");
+  const displayDate = `${parseInt(m)}月${parseInt(d)}日`;
   // 🌟 1. 將 targetDate 轉做 YYYY-MM-DD 格式
   const targetDateStr = targetDate.toISOString().split("T")[0];
 
@@ -210,11 +213,7 @@ export default function HabitTracker({
     <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-          {targetDate.toLocaleDateString("zh-HK", {
-            month: "short",
-            day: "numeric",
-          })}{" "}
-          習慣打卡
+          {displayDate} 習慣打卡
         </h3>
       </div>
 
