@@ -18,6 +18,10 @@ export default function RootLayout({
   return (
     // 🌟 必須加 suppressHydrationWarning
     <html lang="zh-HK" suppressHydrationWarning>
+      <head>
+        {/* 🌟 呢行直接將 🎯 變做 Favicon */}
+     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
