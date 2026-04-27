@@ -301,3 +301,92 @@ export async function revokeShareAccess(friendId: string) {
     return { success: false, error: "移除失敗" }
   }
 }
+
+// ==============================
+// 5. 數據統計功能
+// ==============================
+
+export async function getMonthlyStats(year: number, month: number) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+
+    // 1. 獲取開支數據
+    const expenses = await prisma.expense.findMany({
+      where: { userId: session.user.id, date: { gte: firstDay, lte: lastDay } },
+      include: { category: true }
+    })
+
+    const expenseMap = expenses.reduce((acc, exp) => {
+      const key = exp.category.name
+      if (!acc[key]) acc[key] = { name: `${exp.category.emoji} ${key}`, value: 0, color: exp.category.color }
+      acc[key].value += exp.amount
+      return acc
+    }, {} as Record<string, { name: string, value: number, color: string }>)
+    
+    const expenseData = Object.values(expenseMap).sort((a, b) => b.value - a.value)
+
+    // 2. 獲取習慣數據
+    const habits = await prisma.habit.findMany({ where: { userId: session.user.id } })
+    const habitLogs = await prisma.habitLog.findMany({
+      where: { userId: session.user.id, date: { gte: firstDay, lte: lastDay } }
+    })
+
+    const habitData = habits.map(habit => {
+      const logsForHabit = habitLogs.filter(log => log.habitId === habit.id)
+      const completedDays = logsForHabit.filter(log => 
+        habit.type === "BOOLEAN" ? log.value > 0 : log.value >= (habit.target || 1)
+      ).length
+      
+      const rate = Math.round((completedDays / daysInMonth) * 100)
+      return { name: habit.name, emoji: habit.emoji, color: habit.color, rate }
+    }).sort((a, b) => b.rate - a.rate)
+
+    return { success: true, expenseData, habitData }
+  } catch (error) {
+    console.error("Get Stats Error:", error)
+    return { success: false, error: "獲取數據失敗" }
+  }
+}
+
+export async function updateHabitLog(habitId: string, date: Date, value: number) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false }
+
+    // 1. 先檢查當日係咪已經有呢個習慣嘅打卡記錄
+    const existingLog = await prisma.habitLog.findFirst({
+      where: {
+        habitId: habitId,
+        date: date,
+      }
+    })
+
+    if (existingLog) {
+      // 2. 如果已經有記錄，就 Update 個 value
+      await prisma.habitLog.update({
+        where: { id: existingLog.id },
+        data: { value: value }
+      })
+    } else {
+      // 3. 如果今日未打過卡 (無記錄)，就 Create 一條新嘅
+      await prisma.habitLog.create({
+        data: {
+          userId: session.user.id,
+          habitId: habitId,
+          date: date,
+          value: value
+        }
+      })
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("Update Habit Log Error:", error)
+    return { success: false, error: "打卡失敗" }
+  }
+}

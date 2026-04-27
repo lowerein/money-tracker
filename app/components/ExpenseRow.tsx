@@ -33,21 +33,21 @@ export default function ExpenseRow({
     }
   };
 
-const handleUpdate = async () => {
-    if (!isMe) return // 雙重保險：唔係自己嘅數唔准修改
-    setLoading(true)
-    
+  const handleUpdate = async () => {
+    if (!isMe) return; // 雙重保險：唔係自己嘅數唔准修改
+    setLoading(true);
+
     // 🌟 將參數包裝返做一個 Object，符合你原本 actions.ts 嘅要求
     await updateExpense(exp.id, {
       amount: parseFloat(amount),
       description: description,
       date: exp.date, // 保留原本嘅日期
-      categoryId: categoryId
-    })
-    
-    setIsEditing(false)
-    setLoading(false)
-  }
+      categoryId: categoryId,
+    });
+
+    setIsEditing(false);
+    setLoading(false);
+  };
 
   // ==========================================
   // 編輯模式介面
@@ -97,7 +97,7 @@ const handleUpdate = async () => {
             className="w-full p-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md outline-none focus:ring-2 focus:ring-blue-500"
           />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+        <td className="px-4 py-3 whitespace-nowrap text-right text-sm sticky right-0 bg-blue-50 dark:bg-[#15233b] border-l border-blue-100 dark:border-blue-800 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
           <button
             onClick={handleUpdate}
             disabled={loading}
@@ -168,13 +168,15 @@ const handleUpdate = async () => {
         {exp.description || "-"}
       </td>
 
-      <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+      {/* 🌟 操作按鈕：取消 Hover 隱藏，改為永遠顯示 */}
+      {/* 🌟 加入 sticky right-0 並且同步 hover 嘅背景色 */}
+      <td className="px-4 py-4 whitespace-nowrap text-right text-sm sticky right-0 bg-white dark:bg-gray-900 group-hover:bg-gray-50 dark:group-hover:bg-gray-800/50 transition-colors border-l border-gray-50 dark:border-gray-800 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
         {isMe ? (
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-3">
+          <div className="flex justify-end gap-3">
             <button
               onClick={() => setIsEditing(true)}
               disabled={loading}
-              className="text-gray-400 hover:text-blue-600 transition"
+              className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
               title="編輯"
             >
               ✏️
@@ -182,7 +184,7 @@ const handleUpdate = async () => {
             <button
               onClick={handleDelete}
               disabled={loading}
-              className="text-gray-400 hover:text-red-600 transition"
+              className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors disabled:opacity-50"
               title="刪除"
             >
               🗑️

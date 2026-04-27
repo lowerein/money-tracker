@@ -10,6 +10,7 @@ import CalendarView from "./components/CalendarView";
 import { ThemeToggle } from "./components/ThemeToggle";
 import HabitTracker from "./components/HabitTracker";
 import SettingsManager from "./components/SettingsManager";
+import StatsModal from "./components/StatsModal";
 
 export default async function Home({
   searchParams,
@@ -20,6 +21,7 @@ export default async function Home({
     day?: string;
     page?: string;
     view?: string;
+    cat?: string;
   }>;
 }) {
   const session = await auth();
@@ -121,6 +123,13 @@ export default async function Home({
     });
   }
 
+  // ... 其他參數
+  const pageParam = resolvedSearchParams.page;
+
+  // 🌟 加入呢兩行去接收分類參數
+  const catParam = resolvedSearchParams.cat as string | undefined;
+  const selectedCats = catParam ? catParam.split(",") : [];
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-10 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
@@ -140,12 +149,16 @@ export default async function Home({
           {/* 下半部：操作按鈕與使用者資訊 */}
           {session?.user ? (
             <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3">
-              {/* 左邊：管理分類與習慣 */}
-              <SettingsManager
-                categories={categories}
-                habits={habits}
-                sharedByMe={sharedByMe}
-              />
+              {/* 左邊：統一系統設定面板 與 統計 */}
+              <div className="flex flex-wrap items-center gap-2">
+                <SettingsManager
+                  categories={categories}
+                  habits={habits}
+                  sharedByMe={sharedByMe}
+                />
+                {/* 🌟 引入新嘅統計 Popup */}
+                <StatsModal year={year} month={month} />
+              </div>
               <div className="flex items-center gap-3">
                 {/* 電腦版專屬：日月切換掣 (手機版會隱藏，因為移咗去上面) */}
                 <div className="hidden md:block">
@@ -255,7 +268,8 @@ export default async function Home({
                   month={month}
                   day={selectedDay}
                   page={page}
-                  viewUserIds={viewUserIds} // 🌟 傳入目前選取中嘅 User 清單
+                  viewUserIds={viewUserIds}
+                  selectedCats={selectedCats} // 🌟 傳入呢行
                 />
               </div>
             </div>

@@ -2,8 +2,19 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider"; // 🌟 引入
+import type { Viewport } from 'next'
 
 const inter = Inter({ subsets: ["latin"] });
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f9fafb' }, // Light Mode 背景色
+    { media: '(prefers-color-scheme: dark)', color: '#111827' },  // Dark Mode 背景色
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1, // 🌟 防止 iPhone 用家誤觸放大了畫面
+}
 
 export const metadata: Metadata = {
   title: "Habit Tracker",
@@ -18,10 +29,6 @@ export default function RootLayout({
   return (
     // 🌟 必須加 suppressHydrationWarning
     <html lang="zh-HK" suppressHydrationWarning>
-      <head>
-        {/* 🌟 呢行直接將 🎯 變做 Favicon */}
-     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      </head>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
