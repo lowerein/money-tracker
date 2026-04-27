@@ -61,8 +61,7 @@ export default async function CalendarView({
   const dailyHabits = habitLogs.reduce(
     (acc, log) => {
       const d = new Date(log.date);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
+      const dateStr = new Date(log.date).toISOString().split("T")[0];
       const isCompleted =
         log.habit.type === "BOOLEAN"
           ? log.value > 0

@@ -3,6 +3,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { getHKDateString, getSafeDBDate } from "@/lib/utils"
 
 // ==============================
 // 1. 分類相關操作 (Category)
@@ -199,52 +200,35 @@ export async function deleteHabit(id: string) {
 export async function logHabitProgress(habitId: string, date: Date, value: number) {
   try {
     const session = await auth()
-    if (!session?.user?.id) return { success: false, error: "請先登入" }
+    if (!session?.user?.id) return { success: false }
 
-    // 強制設定時間為當日凌晨 00:00:00
-// 🌟 強制鎖死做香港時間 (Asia/Hong_Kong) 嘅凌晨 00:00:00
-    // 用 en-CA 會安全輸出 YYYY-MM-DD 格式
-    const hkDateStr = new Date(date).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" })
-    
-    // 加上 +08:00 確保 Prisma 存入資料庫時識得自動計返啱個鐘數
-    const logDate = new Date(`${hkDateStr}T00:00:00+08:00`)
-    logDate.setHours(0, 0, 0, 0)
+    // 🌟 1. 將傳入嚟嘅時間，轉做香港 YYYY-MM-DD
+    const hkDateStr = getHKDateString(date)
+    // 🌟 2. 轉做絕對安全嘅 Date Object
+    const safeDate = getSafeDBDate(hkDateStr)
 
-    // 🌟 終極防彈寫法：先搵出今日有無紀錄
     const existingLog = await prisma.habitLog.findFirst({
-      where: {
-        habitId: habitId,
-        date: logDate,
-        userId: session.user.id
-      }
+      where: { habitId, date: safeDate, userId: session.user.id }
     })
 
     if (existingLog) {
-      // 如果有，就用原生 ID 去 Update，保證 100% 成功
       await prisma.habitLog.update({
         where: { id: existingLog.id },
-        data: { value: value }
+        data: { value }
       })
     } else {
-      // 如果無，就 Create 一條新嘅
       await prisma.habitLog.create({
-        data: {
-          value: value,
-          date: logDate,
-          habitId: habitId,
-          userId: session.user.id
-        }
+        data: { value, date: safeDate, habitId, userId: session.user.id }
       })
     }
 
     revalidatePath("/")
     return { success: true }
   } catch (error) {
-    console.error("Log Habit Error:", error)
-    return { success: false, error: "打卡失敗" }
+    console.error(error)
+    return { success: false }
   }
 }
-
 
 // ==============================
 // 4. 社交與分享功能

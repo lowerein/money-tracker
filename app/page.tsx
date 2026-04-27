@@ -11,6 +11,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import HabitTracker from "./components/HabitTracker";
 import SettingsManager from "./components/SettingsManager";
 import StatsModal from "./components/StatsModal";
+import { getHKDateString, getSafeDBDate } from "../lib/utils";
 
 export default async function Home({
   searchParams,
@@ -32,11 +33,11 @@ export default async function Home({
   // ==============================
   // 1. 處理日期邏輯 (鋼鐵級防護)
   // ==============================
-  const newDay = new Date();
-  const hkTodayStr = newDay.toLocaleDateString("en-CA", {
-    timeZone: "Asia/Hong_Kong",
-  });
-  const now = new Date(`${hkTodayStr}T00:00:00+08:00`);
+  const params = await searchParams;
+  const now = new Date();
+  const hkTodayStr = getHKDateString();
+  const targetDateStr = params.day || hkTodayStr;
+  const targetDate = getSafeDBDate(targetDateStr); // 轉做 Date Object 傳畀組件
 
   // 解析年份
   let year = parseInt(resolvedSearchParams.year || "");
