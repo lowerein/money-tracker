@@ -6,19 +6,20 @@ import Link from "next/link";
 import ExpenseForm from "./components/ExpenseForm";
 import ExpenseList from "./components/ExpenseList";
 import Dashboard from "./components/Dashboard";
-import CategoryManager from "./components/CategoryManager";
 import CalendarView from "./components/CalendarView";
 import { ThemeToggle } from "./components/ThemeToggle";
+import HabitTracker from "./components/HabitTracker";
+import SettingsManager from "./components/SettingsManager";
 
 export default async function Home({
   searchParams,
 }: {
-  // 🌟 Next.js 15 必須將 searchParams 設為 Promise
   searchParams: Promise<{
     year?: string;
     month?: string;
     day?: string;
     page?: string;
+    view?: string;
   }>;
 }) {
   const session = await auth();
@@ -57,13 +58,66 @@ export default async function Home({
   const nextMonthDate = new Date(year, month + 1, 1);
 
   // ==============================
-  // 2. 獲取分類資料
+  // 2. 獲取分類、習慣與打卡資料
   // ==============================
   let categories: any[] = [];
+  let habits: any[] = [];
+  let currentDayLogs: any[] = [];
+  let sharedUsers: any[] = []; // 🌟 朋友清單
+  let viewUserIds: string[] = []; // 🌟 準備要睇嘅 ID
+  let sharedByMe: any[] = [];
+  // 決定打卡日期：如果有 click 月曆就用 selectedDay，冇就用今日
+  const targetDateForHabit =
+    selectedDay > 0
+      ? new Date(year, month, selectedDay)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
   if (session?.user?.id) {
+    // 攞分類
     categories = await prisma.category.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "asc" },
+    });
+
+    // 攞習慣
+    habits = await prisma.habit.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // 🌟 搵出授權咗畀我睇嘅朋友
+    const accesses = await prisma.shareAccess.findMany({
+      where: { guestId: session.user.id },
+      include: { owner: true },
+    });
+    sharedUsers = accesses.map((a) => a.owner);
+
+    // 🌟 搵出我授權咗畀邊個睇 (我 Share 畀人 -> InviteManager 用)
+    const accessesByMe = await prisma.shareAccess.findMany({
+      where: { ownerId: session.user.id },
+      include: { guest: true },
+    });
+    sharedByMe = accessesByMe.map((a) => a.guest);
+
+    // 解析 URL 嘅 view 參數，決定睇邊幾個 User 嘅資料
+    const viewParam = resolvedSearchParams.view;
+    if (viewParam) {
+      viewUserIds = viewParam.split(",");
+    } else {
+      viewUserIds = [session.user.id]; // 預設只睇自己
+    }
+
+    // 攞「目標日期」嘅打卡記錄
+    const targetDateStart = new Date(targetDateForHabit);
+    targetDateStart.setHours(0, 0, 0, 0);
+    const targetDateEnd = new Date(targetDateForHabit);
+    targetDateEnd.setHours(23, 59, 59, 999);
+
+    currentDayLogs = await prisma.habitLog.findMany({
+      where: {
+        userId: session.user.id,
+        date: { gte: targetDateStart, lte: targetDateEnd },
+      },
     });
   }
 
@@ -71,34 +125,51 @@ export default async function Home({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-10 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         {/* --- Header 頂部欄 --- */}
+        {/* --- Header 頂部欄 (手機/電腦自適應排版) --- */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              💰 記帳 App
+          {/* 上半部：標題 (手機版會將日月掣放喺右邊) */}
+          <div className="flex items-center justify-between md:justify-start w-full md:w-auto gap-4">
+            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              🎯 Habit Tracker
             </h1>
-            {session?.user && <CategoryManager categories={categories} />}
+
+            {/* 手機版專屬：日月切換掣 */}
+            <div className="md:hidden">{session?.user && <ThemeToggle />}</div>
           </div>
 
+          {/* 下半部：操作按鈕與使用者資訊 */}
           {session?.user ? (
-            <div className="flex items-center gap-3">
-              {/* 日月切換掣 */}
-              <ThemeToggle />
+            <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3">
+              {/* 左邊：管理分類與習慣 */}
+              <SettingsManager
+                categories={categories}
+                habits={habits}
+                sharedByMe={sharedByMe}
+              />
+              <div className="flex items-center gap-3">
+                {/* 電腦版專屬：日月切換掣 (手機版會隱藏，因為移咗去上面) */}
+                <div className="hidden md:block">
+                  <ThemeToggle />
+                </div>
 
-              <div className="flex items-center gap-3 bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                  {session.user.name}
-                </span>
-                <div className="w-px h-4 bg-gray-200 dark:bg-gray-600"></div>
-                <form
-                  action={async () => {
-                    "use server";
-                    await signOut();
-                  }}
-                >
-                  <button className="text-xs text-red-500 hover:text-red-400 font-bold transition-all">
-                    登出
-                  </button>
-                </form>
+                {/* 使用者資訊與登出 */}
+                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 px-3 md:px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-colors">
+                  {/* 加入 max-w-[100px] 同 truncate，防止名字太長撐爆排版 */}
+                  <span className="text-xs md:text-sm font-bold text-gray-700 dark:text-gray-200 truncate max-w-[100px] md:max-w-none">
+                    {session.user.name}
+                  </span>
+                  <div className="w-px h-3 md:h-4 bg-gray-200 dark:bg-gray-600"></div>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut();
+                    }}
+                  >
+                    <button className="text-xs text-red-500 hover:text-red-400 font-bold transition-all">
+                      登出
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           ) : null}
@@ -116,6 +187,13 @@ export default async function Home({
                 </h3>
                 <ExpenseForm categories={categories} />
               </div>
+
+              {/* 🌟 習慣打卡區 (放喺 Dashboard 下面) */}
+              <HabitTracker
+                habits={habits}
+                initialLogs={currentDayLogs}
+                targetDate={targetDateForHabit}
+              />
             </div>
 
             {/* --- 右邊欄：月曆與清單 --- */}
@@ -149,6 +227,9 @@ export default async function Home({
                 year={year}
                 month={month}
                 selectedDay={selectedDay}
+                viewUserIds={viewUserIds} // 🌟 傳入選擇咗嘅 ID
+                sharedUsers={sharedUsers} // 🌟 傳入朋友清單
+                currentUser={{ id: session.user.id, name: session.user.name }}
               />
 
               {/* 詳細列表 */}
@@ -174,6 +255,7 @@ export default async function Home({
                   month={month}
                   day={selectedDay}
                   page={page}
+                  viewUserIds={viewUserIds} // 🌟 傳入目前選取中嘅 User 清單
                 />
               </div>
             </div>
@@ -181,12 +263,12 @@ export default async function Home({
         ) : (
           /* --- 未登入介面 --- */
           <div className="max-w-md mx-auto text-center py-20 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 mt-20 transition-colors">
-            <div className="text-6xl mb-6">📉</div>
+            <div className="text-6xl mb-6">🎯</div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              掌握你的財富
+              掌控你的人生與財富
             </h2>
             <p className="text-gray-500 dark:text-gray-400 mb-8 px-10">
-              登入以開始記錄你的每日開支，並透過數據分析改善消費習慣。
+              登入以開始追蹤每日好習慣與開支，透過數據分析成就更好的自己。
             </p>
             <form
               action={async () => {
@@ -204,7 +286,7 @@ export default async function Home({
 
       {/* 底部裝飾 */}
       <footer className="mt-20 text-center text-gray-300 dark:text-gray-700 text-xs pb-10">
-        &copy; 2024 我的記帳神器. 數據已加密儲存。
+        &copy; {new Date().getFullYear()} Habit Tracker. 數據已加密儲存。
       </footer>
     </div>
   );

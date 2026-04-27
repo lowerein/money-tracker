@@ -1,19 +1,19 @@
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { ThemeProvider } from "./components/ThemeProvider" // 🌟 引入
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { ThemeProvider } from "./components/ThemeProvider"; // 🌟 引入
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Money Tracker",
-  description: "輕鬆記錄每日開支",
-}
+  title: "Habit Tracker",
+  description: "你的終極習慣與財務追蹤神器",
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     // 🌟 必須加 suppressHydrationWarning
@@ -29,5 +29,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

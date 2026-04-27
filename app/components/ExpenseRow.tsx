@@ -1,104 +1,199 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { updateExpense, deleteExpense } from "../actions" 
+import { useState } from "react";
+import { deleteExpense, updateExpense } from "../actions";
 
-export default function ExpenseRow({ exp, categories }: { exp: any, categories: any[] }) {
-  const [isEditing, setIsEditing] = useState(false)
-  
-  const [amount, setAmount] = useState(exp.amount)
-  const [desc, setDesc] = useState(exp.description || "")
-  const [catId, setCatId] = useState(exp.categoryId)
-  
-  const d = new Date(exp.date)
-  const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  const [date, setDate] = useState(localDateStr)
+// 🌟 明確定義 Props 類型，等 TypeScript 認得 currentUserId
+interface ExpenseRowProps {
+  exp: any;
+  categories: any[];
+  currentUserId: string;
+}
 
-  const [loading, setLoading] = useState(false)
+export default function ExpenseRow({
+  exp,
+  categories,
+  currentUserId,
+}: ExpenseRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [amount, setAmount] = useState(exp.amount.toString());
+  const [description, setDescription] = useState(exp.description || "");
+  const [categoryId, setCategoryId] = useState(exp.categoryId);
+  const [loading, setLoading] = useState(false);
 
-  // 喺 Dark mode 預設用白色字 (#f3f4f6)，Light mode 用黑色 (#111827)
-  const fallbackColor = exp.category.color || "inherit"
-
-  const handleUpdate = async () => {
-    setLoading(true)
-    await updateExpense(exp.id, {
-      amount: parseFloat(amount),
-      description: desc,
-      date: new Date(date),
-      categoryId: catId
-    })
-    setLoading(false)
-    setIsEditing(false)
-  }
+  // 判斷呢條數係咪屬於當前登入嘅 User
+  const isMe = exp.userId === currentUserId;
 
   const handleDelete = async () => {
+    if (!isMe) return;
     if (confirm("確定要刪除呢筆開支？")) {
-      await deleteExpense(exp.id)
+      setLoading(true);
+      await deleteExpense(exp.id);
+      setLoading(false);
     }
+  };
+
+const handleUpdate = async () => {
+    if (!isMe) return // 雙重保險：唔係自己嘅數唔准修改
+    setLoading(true)
+    
+    // 🌟 將參數包裝返做一個 Object，符合你原本 actions.ts 嘅要求
+    await updateExpense(exp.id, {
+      amount: parseFloat(amount),
+      description: description,
+      date: exp.date, // 保留原本嘅日期
+      categoryId: categoryId
+    })
+    
+    setIsEditing(false)
+    setLoading(false)
   }
 
-  // --- 📝 編輯模式 ---
-  if (isEditing) {
+  // ==========================================
+  // 編輯模式介面
+  // ==========================================
+  if (isEditing && isMe) {
     return (
-      // 🌟 編輯列背景：加入 dark:bg-blue-900/20
-      <tr className="bg-blue-50/40 dark:bg-blue-900/20 transition-colors">
-        <td className="px-4 py-3 whitespace-nowrap">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border border-blue-200 dark:border-blue-800 dark:bg-gray-800 dark:text-gray-200 rounded p-1.5 text-sm w-[115px] outline-none focus:ring-2 focus:ring-blue-500" />
+      <tr className="bg-blue-50/50 dark:bg-blue-900/20 transition-colors">
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+          {exp.date.toLocaleDateString("zh-HK", {
+            month: "short",
+            day: "numeric",
+          })}
         </td>
+
         <td className="px-4 py-3 whitespace-nowrap">
-          <select value={catId} onChange={e => setCatId(e.target.value)} className="border border-blue-200 dark:border-blue-800 dark:bg-gray-800 dark:text-gray-200 rounded p-1.5 text-sm max-w-[130px] outline-none focus:ring-2 focus:ring-blue-500">
-            {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+          <span className="text-[10px] font-bold text-gray-400">我</span>
+        </td>
+
+        <td className="px-4 py-3 whitespace-nowrap">
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="w-full p-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.emoji} {cat.name}
+              </option>
+            ))}
           </select>
         </td>
         <td className="px-4 py-3 whitespace-nowrap">
-          <input 
-            type="number" 
-            step="0.1" 
-            value={amount} 
-            onChange={e => setAmount(e.target.value)} 
-            className="border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 rounded p-1.5 text-sm w-20 font-bold outline-none focus:ring-2 focus:ring-blue-500" 
-            style={{ color: fallbackColor }}
+          <input
+            type="number"
+            step="0.1"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-24 p-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md outline-none focus:ring-2 focus:ring-blue-500"
           />
         </td>
         <td className="px-4 py-3 whitespace-nowrap">
-          <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="無備註" className="border border-blue-200 dark:border-blue-800 dark:bg-gray-800 dark:text-gray-200 rounded p-1.5 text-sm w-32 outline-none focus:ring-2 focus:ring-blue-500" />
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="備註..."
+            className="w-full p-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap text-right font-medium">
-          <button onClick={handleUpdate} disabled={loading} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs font-bold mr-3 bg-blue-100 dark:bg-blue-900/50 px-2 py-1 rounded">
-            {loading ? "..." : "💾 儲存"}
+        <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+          <button
+            onClick={handleUpdate}
+            disabled={loading}
+            className="text-green-600 hover:text-green-700 font-bold mr-3 disabled:opacity-50"
+          >
+            保存
           </button>
-          <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-xs">取消</button>
+          <button
+            onClick={() => setIsEditing(false)}
+            disabled={loading}
+            className="text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            取消
+          </button>
         </td>
       </tr>
-    )
+    );
   }
 
-  // --- 👁️ 顯示模式 ---
+  // ==========================================
+  // 正常顯示介面
+  // ==========================================
   return (
-    // 🌟 滑鼠 Hover 效果：加入 dark:hover:bg-gray-800/50
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 font-medium">
-        {exp.date.toLocaleDateString("zh-HK", { month: "short", day: "numeric" })}
+        {exp.date.toLocaleDateString("zh-HK", {
+          month: "short",
+          day: "numeric",
+        })}
       </td>
+
+      <td className="px-4 py-4 whitespace-nowrap">
+        {isMe ? (
+          <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">
+            我
+          </span>
+        ) : (
+          <div
+            className="bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px] shadow-sm cursor-help"
+            title={exp.user.name || "朋友"}
+          >
+            {exp.user?.name?.charAt(0).toUpperCase() || "F"}
+          </div>
+        )}
+      </td>
+
       <td className="px-4 py-4 whitespace-nowrap text-sm">
-        <span className="px-2 py-1 inline-flex items-center gap-1.5 text-xs font-bold rounded-md" style={{ backgroundColor: `${exp.category.color}15`, color: fallbackColor }}>
-          <span className="text-sm">{exp.category.emoji}</span> 
+        <span
+          className="px-2 py-1 inline-flex items-center gap-1.5 text-xs font-bold rounded-md"
+          style={{
+            backgroundColor: `${exp.category.color}15`,
+            color: exp.category.color,
+          }}
+        >
+          <span className="text-sm">{exp.category.emoji}</span>
           {exp.category.name}
         </span>
       </td>
-      <td 
+
+      <td
         className="px-4 py-4 whitespace-nowrap text-sm font-black tracking-wide"
-        style={{ color: fallbackColor }}
+        style={{ color: exp.category.color }}
       >
         ${exp.amount.toFixed(1)}
       </td>
-      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-        {exp.description || <span className="text-gray-300 dark:text-gray-600 italic">-</span>}
+
+      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 italic">
+        {exp.description || "-"}
       </td>
+
       <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
-        <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 mr-3 transition" title="修改">✏️</button>
-        <button onClick={handleDelete} className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition" title="刪除">🗑️</button>
+        {isMe ? (
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-end gap-3">
+            <button
+              onClick={() => setIsEditing(true)}
+              disabled={loading}
+              className="text-gray-400 hover:text-blue-600 transition"
+              title="編輯"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              className="text-gray-400 hover:text-red-600 transition"
+              title="刪除"
+            >
+              🗑️
+            </button>
+          </div>
+        ) : (
+          <span className="text-[10px] text-gray-300 dark:text-gray-600 italic px-2">
+            唯讀
+          </span>
+        )}
       </td>
     </tr>
-  )
+  );
 }

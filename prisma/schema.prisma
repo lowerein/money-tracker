@@ -1,14 +1,15 @@
 generator client {
-  provider = "prisma-client-js" // 最新 Prisma 7 Wasm 引擎
+  provider = "prisma-client-js"
 }
 
+// 如果你用 Vercel Postgres / Neon / Supabase，provider 通常係 "postgresql"
+// 如果你喺 Local 用 SQLite，請改為 "sqlite"
 datasource db {
   provider = "postgresql"
-  // 無需 url，連線已經由 adapter 同 config 接管
 }
 
 // ==============================
-// NextAuth 必須嘅 Models
+// 🔐 NextAuth 必須模型 (登入系統)
 // ==============================
 
 model Account {
@@ -47,43 +48,100 @@ model User {
   accounts      Account[]
   sessions      Session[]
   
-  // 關聯到記帳 App 嘅 Models
+  // 🌟 💰 記帳 App 關聯
   expenses      Expense[]
   categories    Category[]
+
+  // 🌟 🎯 習慣養成 App 關聯
+  habits        Habit[]
+  habitLogs     HabitLog[]
+
+  sharedByMe    ShareAccess[] @relation("SharedByMe")
+  sharedWithMe  ShareAccess[] @relation("SharedWithMe")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // ==============================
-// 記帳 App 核心 Models
+// 💰 記帳 App 模型 (Money Tracker)
 // ==============================
 
-// 自定義分類
 model Category {
   id        String    @id @default(cuid())
   name      String
-  color     String
-  emoji     String    @default("📌") // <--- 加入呢行 (加 default 以防舊資料出錯)
+  color     String    @default("#3b82f6")
+  emoji     String    @default("📌")
   userId    String
-  createdAt DateTime  @default(now())
-  
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expenses  Expense[]
+  createdAt DateTime  @default(now())
 }
 
-// 每日開支
 model Expense {
   id          String   @id @default(cuid())
-  amount      Float    // 金額
-  description String?  // 備註
-  date        DateTime // 開支日期 (因為 User 可能補記之前嘅數)
-  
+  amount      Float
+  description String?
+  date        DateTime
   categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
-  
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
 
-  @@index([userId, date]) // 加快按月份/日子查詢嘅 Database 效能
+// ==============================
+// 🎯 習慣養成模型 (Habit Tracker)
+// ==============================
+
+model Habit {
+  id        String     @id @default(cuid())
+  name      String     // 例如: "做運動" 或 "飲水"
+  emoji     String     @default("⭐")
+  color     String     @default("#10b981")
+  
+  // 習慣類型與目標
+  type      String     @default("BOOLEAN") // "BOOLEAN" (有/冇) 或 "NUMERIC" (數值)
+  unit      String?    // 例如: "杯", "頁" (只限 NUMERIC)
+  target    Float?     // 例如: 8 (只限 NUMERIC)
+  
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs      HabitLog[]
+  createdAt DateTime   @default(now())
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  date      DateTime // 打卡日期 (通常存為凌晨 00:00)
+  
+  // 完成數值
+  value     Float    @default(1) // BOOLEAN 預設存 1；NUMERIC 存實際進度 (例如 5)
+  
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // 確保同一日、同一個 User 嘅同一個習慣，只會有一筆記錄 (NUMERIC 只需要 update value)
+  @@unique([date, habitId, userId]) 
+}
+
+// 🌟 加入呢段：授權分享模型
+model ShareAccess {
+  id        String   @id @default(cuid())
+  ownerId   String   // 分享資料嘅人 (你)
+  owner     User     @relation("SharedByMe", fields: [ownerId], references: [id], onDelete: Cascade)
+  guestId   String   // 被邀請睇資料嘅人 (朋友)
+  guest     User     @relation("SharedWithMe", fields: [guestId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, guestId]) // 確保唔會重複邀請同一個人
 }

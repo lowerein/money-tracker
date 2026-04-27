@@ -152,3 +152,152 @@ export async function deleteExpense(id: string) {
     return { success: false, error: "刪除失敗" }
   }
 }
+
+// ==============================
+// 3. 習慣養成相關操作 (Habit Tracker)
+// ==============================
+
+// 新增習慣
+export async function createHabit(data: { name: string, emoji: string, color: string, type: string, target?: number, unit?: string }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    await prisma.habit.create({
+      data: { 
+        ...data, 
+        userId: session.user.id 
+      },
+    })
+    
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Create Habit Error:", error)
+    return { success: false, error: "新增失敗" }
+  }
+}
+
+// 刪除習慣
+export async function deleteHabit(id: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    await prisma.habit.delete({
+      where: { id, userId: session.user.id },
+    })
+    
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: "刪除失敗" }
+  }
+}
+
+// 🌟 核心打卡功能 (支援有做/無做 及 數值加減)
+export async function logHabitProgress(habitId: string, date: Date, value: number) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    // 將時間強制設定為當日凌晨 00:00:00，確保同一日只會有一條記錄
+    const logDate = new Date(date)
+    logDate.setHours(0, 0, 0, 0)
+
+    if (value <= 0) {
+      // 如果數值 <= 0 (例如取消打卡)，就直接刪除嗰日嘅記錄
+      await prisma.habitLog.deleteMany({
+        where: { 
+          habitId, 
+          userId: session.user.id, 
+          date: logDate 
+        }
+      })
+    } else {
+      // upsert: 如果今日未打卡就 Create，打咗卡就 Update 個數值
+      await prisma.habitLog.upsert({
+        where: {
+          date_habitId_userId: {
+            date: logDate,
+            habitId,
+            userId: session.user.id
+          }
+        },
+        update: { value },
+        create: {
+          date: logDate,
+          value,
+          habitId,
+          userId: session.user.id
+        }
+      })
+    }
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Log Habit Error:", error)
+    return { success: false, error: "打卡失敗" }
+  }
+}
+
+
+// ==============================
+// 4. 社交與分享功能
+// ==============================
+
+// ==============================
+// 4. 社交與分享功能
+// ==============================
+
+export async function inviteFriend(email: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+    if (session.user.email === email) return { success: false, error: "唔可以邀請自己！" }
+
+    // 搵個朋友出嚟
+    const friend = await prisma.user.findUnique({ where: { email } })
+    if (!friend) return { success: false, error: "搵唔到呢個 Email 嘅用戶，請確保佢已經登入過一次 App。" }
+
+    // 🌟 雙向分享機制 (Mutual Share)
+    // 建立兩條記錄：你 -> 朋友，同埋 朋友 -> 你
+    await prisma.shareAccess.createMany({
+      data: [
+        { ownerId: session.user.id, guestId: friend.id }, // 你 Share 畀佢
+        { ownerId: friend.id, guestId: session.user.id }  // 佢 Share 畀你
+      ],
+      skipDuplicates: true, // 如果已經存在部分關係，唔會報錯，直接略過
+    })
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Invite Error:", error)
+    return { success: false, error: "邀請失敗" }
+  }
+}
+
+// 🌟 收回分享權限 (雙向解除好友)
+export async function revokeShareAccess(friendId: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    // 用 deleteMany 一次過刪除 A->B 同 B->A 嘅記錄
+    await prisma.shareAccess.deleteMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id, guestId: friendId },
+          { ownerId: friendId, guestId: session.user.id }
+        ]
+      }
+    })
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Remove Share Error:", error)
+    return { success: false, error: "移除失敗" }
+  }
+}
