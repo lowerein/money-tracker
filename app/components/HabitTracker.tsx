@@ -182,67 +182,68 @@ function BooleanHabitRow({
 // ==========================================
 // 3. 主模組 (保留你最原本的白色大卡片與標題)
 // ==========================================
-export default function HabitTracker({
-  habits,
-  initialLogs = [],
-  targetDate,
-}: {
-  habits: any[];
-  initialLogs?: any[];
-  targetDate: Date;
+export default function HabitTracker({ 
+  habits, 
+  initialLogs = [], 
+  targetDate 
+}: { 
+  habits: any[], 
+  initialLogs?: any[], 
+  targetDate: Date 
 }) {
-  if (habits.length === 0) return null;
+  if (habits.length === 0) return null
 
-  // 整理數據
-  const logMap: Record<string, number> = {};
-  initialLogs.forEach((log) => {
-    logMap[log.habitId] = log.value;
-  });
+  // 🌟 1. 將 targetDate 轉做 YYYY-MM-DD 格式
+  const targetDateStr = targetDate.toISOString().split('T')[0]
 
-  // 🌟 將日期轉做字串，用嚟做 Key 嘅一部分
-  const dateKey = targetDate.toISOString().split("T")[0];
+  // 🌟 2. 整理數據，嚴格過濾只屬於 targetDate 嘅紀錄
+  const logMap: Record<string, number> = {}
+  initialLogs.forEach(log => {
+    const logDateStr = new Date(log.date).toISOString().split('T')[0]
+    
+    // 如果條 Log 嘅日子等於你揀嗰日，先至拎個 value 出嚟
+    if (logDateStr === targetDateStr) {
+      logMap[log.habitId] = log.value
+    }
+  })
 
   return (
     <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-          {targetDate.toLocaleDateString("zh-HK", {
-            month: "short",
-            day: "numeric",
-          })}{" "}
-          習慣打卡
+          {targetDate.toLocaleDateString("zh-HK", { month: "short", day: "numeric" })} 習慣打卡
         </h3>
       </div>
 
       <div className="space-y-3">
-        {habits.map((habit) => {
-          const initialValue = logMap[habit.id] || 0;
-
-          // 🌟 重要修正：Key 加入咗 dateKey
-          // 當日期改變時，key 就會變，組件會強制重置 state
-          const uniqueKey = `${habit.id}-${dateKey}`;
+        {habits.map(habit => {
+          // 如果 logMap 搵唔到當日紀錄，就會乖乖地出 0
+          const initialValue = logMap[habit.id] || 0
+          
+          // 繼續用 dateKey 強制刷新組件
+          const uniqueKey = `${habit.id}-${targetDateStr}`
 
           if (habit.type === "NUMERIC") {
             return (
-              <NumericHabitRow
-                key={uniqueKey}
-                habit={habit}
-                initialValue={initialValue}
-                targetDate={targetDate}
+              <NumericHabitRow 
+                key={uniqueKey} 
+                habit={habit} 
+                initialValue={initialValue} 
+                targetDate={targetDate} 
               />
-            );
+            )
           } else {
             return (
-              <BooleanHabitRow
-                key={uniqueKey}
-                habit={habit}
-                initialValue={initialValue}
-                targetDate={targetDate}
+              <BooleanHabitRow 
+                key={uniqueKey} 
+                habit={habit} 
+                initialValue={initialValue} 
+                targetDate={targetDate} 
               />
-            );
+            )
           }
         })}
       </div>
     </div>
-  );
+  )
 }
