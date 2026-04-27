@@ -102,19 +102,19 @@ model Expense {
 
 model Habit {
   id        String     @id @default(cuid())
-  name      String     // 例如: "做運動" 或 "飲水"
-  emoji     String     @default("⭐")
-  color     String     @default("#10b981")
-  
-  // 習慣類型與目標
-  type      String     @default("BOOLEAN") // "BOOLEAN" (有/冇) 或 "NUMERIC" (數值)
-  unit      String?    // 例如: "杯", "頁" (只限 NUMERIC)
-  target    Float?     // 例如: 8 (只限 NUMERIC)
-  
   userId    String
+  name      String
+  emoji     String
+  color     String     
+  type      String     @default("BOOLEAN") // 🌟 改返做 String，預設加雙引號
+  target    Float?
+  unit      String?
+  order     Int        @default(0) 
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt @default(now())
+
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   logs      HabitLog[]
-  createdAt DateTime   @default(now())
 }
 
 model HabitLog {

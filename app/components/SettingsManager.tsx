@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   createCategory,
   updateCategory,
@@ -9,6 +9,8 @@ import {
   deleteHabit,
   inviteFriend,
   revokeShareAccess,
+  updateHabit,
+  updateHabitOrder,
 } from "../actions";
 
 export default function SettingsManager({
@@ -77,6 +79,35 @@ export default function SettingsManager({
   const [catName, setCatName] = useState("");
   const [catEmoji, setCatEmoji] = useState("📌");
   const [catColor, setCatColor] = useState("#3b82f6");
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editHabitName, setEditHabitName] = useState("");
+  const [editHabitEmoji, setEditHabitEmoji] = useState("");
+  const [editHabitTarget, setEditHabitTarget] = useState(1);
+  const [editHabitUnit, setEditHabitUnit] = useState("");
+  const [localHabits, setLocalHabits] = useState(habits);
+
+  const startEditHabit = (habit: any) => {
+    setEditingHabitId(habit.id);
+    setEditHabitName(habit.name);
+    setEditHabitEmoji(habit.emoji);
+    setEditHabitTarget(habit.target || 1);
+    setEditHabitUnit(habit.unit || "");
+  };
+
+  const handleSaveEditHabit = async () => {
+    if (!editingHabitId || !editHabitName.trim() || !editHabitEmoji.trim())
+      return;
+    setLoading(true);
+    await updateHabit(
+      editingHabitId,
+      editHabitName,
+      editHabitEmoji,
+      editHabitTarget,
+      editHabitUnit,
+    );
+    setEditingHabitId(null);
+    setLoading(false);
+  };
 
   const resetCatForm = () => {
     setCatEditingId(null);
@@ -112,6 +143,10 @@ export default function SettingsManager({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setLocalHabits(habits);
+  }, [habits]);
 
   // ==========================================
   // 🎯 習慣 State & Handlers
@@ -154,6 +189,25 @@ export default function SettingsManager({
       await deleteHabit(id);
       setLoading(false);
     }
+  };
+
+  const moveHabit = async (index: number, direction: "UP" | "DOWN") => {
+    if (direction === "UP" && index === 0) return;
+    if (direction === "DOWN" && index === localHabits.length - 1) return;
+
+    const newList = [...localHabits];
+    const swapIndex = direction === "UP" ? index - 1 : index + 1;
+
+    // 交換位置
+    const temp = newList[index];
+    newList[index] = newList[swapIndex];
+    newList[swapIndex] = temp;
+
+    setLocalHabits(newList); // 即時更新畫面
+
+    // 射去 Server Save
+    const newOrderIds = newList.map((h) => h.id);
+    await updateHabitOrder(newOrderIds);
   };
 
   // ==========================================
@@ -336,39 +390,140 @@ export default function SettingsManager({
                       ➕ 新增習慣
                     </button>
                   </form>
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                      現有清單
-                    </h3>
-                    {habits.map((h) => (
-                      <div
-                        key={h.id}
-                        className="flex justify-between p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: h.color }}
-                          ></div>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-sm text-gray-700 dark:text-gray-200">
-                              {h.emoji} {h.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              {h.type === "BOOLEAN"
-                                ? "✅ 達成型"
-                                : `📈 目標: ${h.target}${h.unit}`}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteHabit(h.id)}
-                          className="text-gray-400 hover:text-red-500 p-1"
+                  <div className="space-y-2 mt-4 max-h-[40vh] overflow-y-auto pr-2">
+                    {habits.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-4">
+                        未有任何習慣。
+                      </p>
+                    ) : (
+                      localHabits.map((habit, index) => (
+                        <div
+                          key={habit.id}
+                          className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700"
                         >
-                          🗑️
-                        </button>
-                      </div>
-                    ))}
+                          {/* 🌟 編輯模式 */}
+                          {editingHabitId === habit.id ? (
+                            <div className="flex-1 flex flex-col gap-2 mr-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editHabitEmoji}
+                                  onChange={(e) =>
+                                    setEditHabitEmoji(e.target.value)
+                                  }
+                                  className="w-10 p-1.5 text-center text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                />
+                                <input
+                                  type="text"
+                                  value={editHabitName}
+                                  onChange={(e) =>
+                                    setEditHabitName(e.target.value)
+                                  }
+                                  placeholder="習慣名稱"
+                                  className="flex-1 p-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                />
+                              </div>
+                              {habit.type === "NUMERIC" && (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={editHabitTarget}
+                                    onChange={(e) =>
+                                      setEditHabitTarget(
+                                        parseFloat(e.target.value),
+                                      )
+                                    }
+                                    className="w-20 p-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={editHabitUnit}
+                                    onChange={(e) =>
+                                      setEditHabitUnit(e.target.value)
+                                    }
+                                    placeholder="單位 (例如: 杯)"
+                                    className="w-20 p-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg"
+                                  />
+                                </div>
+                              )}
+                              <div className="flex gap-2 justify-end mt-1">
+                                <button
+                                  onClick={() => setEditingHabitId(null)}
+                                  className="text-xs font-bold text-gray-500 hover:text-gray-700"
+                                >
+                                  取消
+                                </button>
+                                <button
+                                  onClick={handleSaveEditHabit}
+                                  disabled={loading}
+                                  className="text-xs font-bold text-green-600 hover:text-green-700"
+                                >
+                                  儲存
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* 🌟 正常顯示模式 */
+                            <>
+                              <div className="flex items-center gap-3">
+                                {/* 🌟 排序按鈕區 */}
+                                <div className="flex flex-col gap-0.5 mr-1">
+                                  <button
+                                    onClick={() => moveHabit(index, "UP")}
+                                    disabled={index === 0 || loading}
+                                    className="text-[10px] text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button
+                                    onClick={() => moveHabit(index, "DOWN")}
+                                    disabled={
+                                      index === localHabits.length - 1 ||
+                                      loading
+                                    }
+                                    className="text-[10px] text-gray-300 hover:text-gray-500 disabled:opacity-20 transition-colors"
+                                  >
+                                    ▼
+                                  </button>
+                                </div>
+
+                                <span className="text-xl">{habit.emoji}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    {habit.name}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-bold tracking-wider">
+                                    {habit.type === "BOOLEAN"
+                                      ? "每日打卡"
+                                      : `目標: ${habit.target} ${habit.unit}`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => startEditHabit(habit)}
+                                  disabled={loading}
+                                  className="text-gray-400 hover:text-blue-500 transition-colors"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm("確定刪除此習慣？"))
+                                      handleDeleteHabit(habit.id);
+                                  }}
+                                  disabled={loading}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

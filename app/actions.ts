@@ -390,3 +390,60 @@ export async function updateHabitLog(habitId: string, date: Date, value: number)
     return { success: false, error: "打卡失敗" }
   }
 }
+
+// 🌟 更新習慣
+export async function updateHabit(
+  id: string, 
+  name: string, 
+  emoji: string, 
+  target?: number, 
+  unit?: string
+) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false, error: "請先登入" }
+
+    await prisma.habit.update({
+      where: { 
+        id: id,
+        userId: session.user.id // 確保只可以改自己嘅習慣
+      },
+      data: {
+        name,
+        emoji,
+        target,
+        unit
+      }
+    })
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Update Habit Error:", error)
+    return { success: false, error: "更新習慣失敗" }
+  }
+}
+
+// 🌟 更新習慣次序
+export async function updateHabitOrder(habitIds: string[]) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { success: false }
+
+    // 用 Transaction 確保一次過順序更新晒所有 ID
+    await prisma.$transaction(
+      habitIds.map((id, index) => 
+        prisma.habit.update({
+          where: { id: id, userId: session.user?.id },
+          data: { order: index } // 將 index 變成佢嘅新次序
+        })
+      )
+    )
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Update Habit Order Error:", error)
+    return { success: false, error: "更新次序失敗" }
+  }
+}

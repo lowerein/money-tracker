@@ -154,7 +154,7 @@ function BooleanHabitRow({ habit, initialValue, targetDate }: { habit: any, init
 // ==========================================
 export default function HabitTracker({ 
   habits, 
-  initialLogs = [], // 防死機設定
+  initialLogs = [], 
   targetDate 
 }: { 
   habits: any[], 
@@ -163,11 +163,14 @@ export default function HabitTracker({
 }) {
   if (habits.length === 0) return null
 
-  // 整理數據方便讀取
+  // 整理數據
   const logMap: Record<string, number> = {}
   initialLogs.forEach(log => {
     logMap[log.habitId] = log.value
   })
+
+  // 🌟 將日期轉做字串，用嚟做 Key 嘅一部分
+  const dateKey = targetDate.toISOString().split('T')[0]
 
   return (
     <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
@@ -180,11 +183,29 @@ export default function HabitTracker({
       <div className="space-y-3">
         {habits.map(habit => {
           const initialValue = logMap[habit.id] || 0
+          
+          // 🌟 重要修正：Key 加入咗 dateKey
+          // 當日期改變時，key 就會變，組件會強制重置 state
+          const uniqueKey = `${habit.id}-${dateKey}`
 
           if (habit.type === "NUMERIC") {
-            return <NumericHabitRow key={habit.id} habit={habit} initialValue={initialValue} targetDate={targetDate} />
+            return (
+              <NumericHabitRow 
+                key={uniqueKey} 
+                habit={habit} 
+                initialValue={initialValue} 
+                targetDate={targetDate} 
+              />
+            )
           } else {
-            return <BooleanHabitRow key={habit.id} habit={habit} initialValue={initialValue} targetDate={targetDate} />
+            return (
+              <BooleanHabitRow 
+                key={uniqueKey} 
+                habit={habit} 
+                initialValue={initialValue} 
+                targetDate={targetDate} 
+              />
+            )
           }
         })}
       </div>

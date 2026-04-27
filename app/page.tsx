@@ -84,7 +84,7 @@ export default async function Home({
     // 攞習慣
     habits = await prisma.habit.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     });
 
     // 🌟 搵出授權咗畀我睇嘅朋友
