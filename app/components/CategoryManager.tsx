@@ -1,145 +1,168 @@
 "use client"
 
 import { useState } from "react"
-import { createCategory, deleteCategory, updateCategory } from "@/app/actions"
-
-const EMOJI_LIST = [
-  "🍔", "🍕", "🍜", "🍣", "🍽️", "☕", "🍺", "🍷", "🍎", "🥦", "🍼", "🍰",
-  "🚗", "🚕", "🚌", "🚆", "✈️", "🚲", "🛥️", "⛽", "🅿️", "🎫",
-  "🏠", "💡", "💧", "🛜", "🧹", "🪑", "🛠️", "🧻",
-  "🛒", "🛍️", "👗", "👟", "💄", "💍", "📱", "💻",
-  "🎮", "🎬", "🎵", "🎪", "🏖️", "📸", "🎨", "⚽",
-  "🏥", "💊", "⚕️", "💇", "🏋️", "🧘", "🐶", "🐱", 
-  "📚", "✏️", "🎓", "💼", "🎁", "🧧", "💰", "💳", "🏦", "🧾", "💸", "📌"
-]
+import { createCategory, updateCategory, deleteCategory } from "../actions"
 
 export default function CategoryManager({ categories }: { categories: any[] }) {
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
   
-  const [newName, setNewName] = useState("")
-  const [newEmoji, setNewEmoji] = useState("📌")
-  const [newColor, setNewColor] = useState("#3b82f6")
-  const [showNewEmojiPicker, setShowNewEmojiPicker] = useState(false)
-
+  // 表單 State
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState("")
-  const [editEmoji, setEditEmoji] = useState("")
-  const [editColor, setEditColor] = useState("")
-  const [showEditEmojiPicker, setShowEditEmojiPicker] = useState(false)
+  const [name, setName] = useState("")
+  const [emoji, setEmoji] = useState("📌")
+  const [color, setColor] = useState("#3b82f6")
+  const [loading, setLoading] = useState(false)
 
-  const handleCreate = async (e: React.FormEvent) => {
+  // 🌟 終極補回：超長版常用 Emoji 快速選擇列表
+  const quickEmojis = [
+    "🍽️", "🍔", "☕", "🍺", // 飲食
+    "🛒", "🛍️", "👕", "👗", // 購物
+    "🏠", "💡", "💧", "🧹", // 居住/雜費
+    "🚗", "🚌", "🚆", "✈️", // 交通/旅行
+    "🎬", "🎮", "🎵", "🎫", // 娛樂
+    "🏥", "💊", "💇‍♀️", "🧴", // 醫療/美容
+    "🐶", "🐱", "👶", "🎓", // 寵物/孩童/教育
+    "📱", "💻", "🌐", "⛽", // 科技/通訊/入油
+    "🎁", "💰", "💳", "📌"  // 其他
+  ]
+
+  const resetForm = () => {
+    setEditingId(null)
+    setName("")
+    setEmoji("📌")
+    setColor("#3b82f6")
+  }
+
+  const handleOpen = () => {
+    resetForm()
+    setIsOpen(true)
+  }
+
+  const handleEdit = (cat: any) => {
+    setEditingId(cat.id)
+    setName(cat.name)
+    setEmoji(cat.emoji || "📌")
+    setColor(cat.color || "#3b82f6")
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name.trim()) return
     setLoading(true)
-    const res = await createCategory(newName, newColor, newEmoji)
-    if (res.success) {
-      setNewName("")
-      setShowNewEmojiPicker(false)
+
+    if (editingId) {
+      await updateCategory(editingId, name, color, emoji)
+    } else {
+      await createCategory(name, color, emoji)
     }
+
+    resetForm()
     setLoading(false)
   }
 
-  const handleUpdate = async (id: string) => {
-    await updateCategory(id, editName, editColor, editEmoji)
-    setEditingId(null)
-    setShowEditEmojiPicker(false)
-  }
-
   const handleDelete = async (id: string) => {
-    if (confirm("確定刪除此分類？相關開支亦會被剷除！")) {
+    if (confirm("⚠️ 確定刪除？此操作會連帶刪除該分類下所有開支！")) {
+      setLoading(true)
       await deleteCategory(id)
+      setLoading(false)
     }
   }
 
   return (
     <>
-      {/* 🌟 修正 1：移除所有外圍 margin，確保同登出掣完美對齊水平線 */}
       <button 
-        onClick={() => setIsOpen(true)}
-        className="text-sm bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm hover:bg-gray-50 transition flex items-center gap-2 h-[40px]"
+        onClick={handleOpen}
+        className="text-sm font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-gray-700"
       >
-        ⚙️ 管理分類
+        <span>⚙️</span> 管理分類
       </button>
 
-      {/* 🌟 修正 2：彈出式視窗 (Modal Overlay) */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 dark:border-gray-800 transition-colors">
             
-            {/* 關閉按鈕 */}
-            <button 
-              onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition"
-            >
-              ✖
-            </button>
-
-            <div className="p-8">
-              <h2 className="text-2xl font-bold mb-6">⚙️ 管理分類</h2>
-
-              {/* --- 第一部份：新增分類 --- */}
-              <div className="mb-8 pb-8 border-b border-gray-100">
-                <h3 className="text-sm font-bold text-gray-400 uppercase mb-4 tracking-widest">新增分類</h3>
-                <form onSubmit={handleCreate} className="flex flex-wrap gap-4 items-end">
-                  <div className="relative">
-                    <button type="button" onClick={() => setShowNewEmojiPicker(!showNewEmojiPicker)} className="h-10 w-12 bg-gray-50 border rounded flex items-center justify-center text-xl hover:bg-gray-100">
-                      {newEmoji}
-                    </button>
-                    {showNewEmojiPicker && (
-                      <div className="absolute top-12 left-0 z-50 bg-white border shadow-2xl p-2 rounded-lg grid grid-cols-6 gap-1 w-64 max-h-48 overflow-y-auto">
-                        {EMOJI_LIST.map(e => <button key={e} type="button" onClick={() => {setNewEmoji(e); setShowNewEmojiPicker(false)}} className="p-1 hover:bg-gray-100 rounded text-xl">{e}</button>)}
-                      </div>
-                    )}
-                  </div>
-                  <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="分類名" className="border rounded h-10 px-3 flex-1 min-w-[120px] focus:ring-2 focus:ring-blue-500 outline-none" required />
-                  <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} className="h-10 w-10 p-1 bg-transparent cursor-pointer" />
-                  <button disabled={loading} className="bg-blue-600 text-white px-6 h-10 rounded-lg hover:bg-blue-700 transition">添加</button>
-                </form>
-              </div>
-
-              {/* --- 第二部份：管理現有列表 --- */}
-              <div>
-                <h3 className="text-sm font-bold text-gray-400 uppercase mb-4 tracking-widest">現有分類 ({categories.length})</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {categories.map(cat => (
-                    <div key={cat.id} className="p-3 border rounded-lg flex items-center justify-between hover:shadow-md transition bg-gray-50">
-                      {editingId === cat.id ? (
-                        <div className="flex flex-col gap-2 w-full">
-                          <div className="flex items-center gap-2 relative">
-                            <button type="button" onClick={() => setShowEditEmojiPicker(!showEditEmojiPicker)} className="text-xl bg-white border p-1 rounded w-8 h-8 flex items-center justify-center">{editEmoji}</button>
-                            <input value={editName} onChange={e => setEditName(e.target.value)} className="border rounded px-2 h-8 flex-1 text-sm outline-none focus:border-blue-500" />
-                            <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} className="w-8 h-8 p-0 border-none bg-transparent cursor-pointer" />
-                            
-                            {showEditEmojiPicker && (
-                              <div className="absolute top-10 left-0 z-50 bg-white border shadow-xl p-2 rounded-lg grid grid-cols-6 gap-1 w-56 max-h-40 overflow-y-auto">
-                                {EMOJI_LIST.map(e => <button key={e} type="button" onClick={() => {setEditEmoji(e); setShowEditEmojiPicker(false)}} className="p-1 hover:bg-gray-100 rounded text-lg">{e}</button>)}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex justify-end gap-3 mt-1">
-                            <button onClick={() => setEditingId(null)} className="text-xs text-gray-500 hover:text-gray-700">取消</button>
-                            <button onClick={() => handleUpdate(cat.id)} className="text-xs text-blue-600 font-bold hover:text-blue-800">儲存</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xl drop-shadow-sm">{cat.emoji}</span>
-                            <span className="text-sm font-bold" style={{ color: cat.color }}>{cat.name}</span>
-                          </div>
-                          <div className="flex gap-3">
-                            <button onClick={() => {setEditingId(cat.id); setEditName(cat.name); setEditEmoji(cat.emoji); setEditColor(cat.color);}} className="text-gray-400 hover:text-blue-600 transition">✏️</button>
-                            <button onClick={() => handleDelete(cat.id)} className="text-gray-400 hover:text-red-600 transition">🗑️</button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
+            {/* Header */}
+            <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/50">
+              <h2 className="text-xl font-black text-gray-800 dark:text-white tracking-tight">⚙️ 管理分類</h2>
+              <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl font-bold leading-none">&times;</button>
             </div>
+
+            <div className="p-4 md:p-6 max-h-[70vh] overflow-y-auto">
+              {/* 表單區塊 */}
+              <form onSubmit={handleSave} className="mb-8 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">
+                  {editingId ? "修改分類" : "新增分類"}
+                </h3>
+                
+                <div className="flex gap-2 mb-4">
+                  <div className="w-16">
+                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Emoji</label>
+                     <input type="text" value={emoji} onChange={e => setEmoji(e.target.value)} required className="w-full p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-center dark:text-white" />
+                  </div>
+                  <div className="flex-1">
+                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">名稱</label>
+                     <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="例如: 飲食" className="w-full p-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:text-white placeholder-gray-300 dark:placeholder-gray-600" />
+                  </div>
+                  <div className="w-16">
+                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">顏色</label>
+                     <input type="color" value={color} onChange={e => setColor(e.target.value)} className="w-full h-[42px] p-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer" />
+                  </div>
+                </div>
+
+                {/* 🌟 快速 Emoji 選擇區 (加長版) */}
+                <div className="mb-5">
+                  <div className="flex flex-wrap gap-1 bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-200 dark:border-gray-700 justify-center">
+                    {quickEmojis.map(e => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => setEmoji(e)}
+                        className={`w-8 h-8 flex items-center justify-center text-lg rounded transition-colors ${
+                          emoji === e 
+                            ? 'bg-blue-100 dark:bg-blue-900/50 border border-blue-300 dark:border-blue-500 shadow-sm' 
+                            : 'hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent'
+                        }`}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button type="submit" disabled={loading} className="flex-1 bg-blue-600 dark:bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white font-bold py-2 rounded-lg transition-colors disabled:opacity-50">
+                    {loading ? "儲存中..." : (editingId ? "💾 更新" : "➕ 新增")}
+                  </button>
+                  {editingId && (
+                    <button type="button" onClick={resetForm} className="px-4 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-2 rounded-lg transition-colors">
+                      取消
+                    </button>
+                  )}
+                </div>
+              </form>
+
+              {/* 現有分類列表 */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">現有分類</h3>
+                {categories.length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">暫無分類</p>
+                ) : (
+                  categories.map(cat => (
+                    <div key={cat.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm hover:shadow dark:hover:bg-gray-750 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: cat.color }}></div>
+                        <span className="font-bold text-gray-700 dark:text-gray-200">{cat.emoji} {cat.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleEdit(cat)} className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1" title="修改">✏️</button>
+                        <button onClick={() => handleDelete(cat.id)} disabled={loading} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1" title="刪除">🗑️</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
       )}
