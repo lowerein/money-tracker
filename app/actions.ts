@@ -201,38 +201,28 @@ export async function logHabitProgress(habitId: string, date: Date, value: numbe
     const session = await auth()
     if (!session?.user?.id) return { success: false, error: "請先登入" }
 
-    // 將時間強制設定為當日凌晨 00:00:00，確保同一日只會有一條記錄
+    // 強制設定為當日凌晨 00:00:00
     const logDate = new Date(date)
     logDate.setHours(0, 0, 0, 0)
 
-    if (value <= 0) {
-      // 如果數值 <= 0 (例如取消打卡)，就直接刪除嗰日嘅記錄
-      await prisma.habitLog.deleteMany({
-        where: { 
-          habitId, 
-          userId: session.user.id, 
-          date: logDate 
-        }
-      })
-    } else {
-      // upsert: 如果今日未打卡就 Create，打咗卡就 Update 個數值
-      await prisma.habitLog.upsert({
-        where: {
-          date_habitId_userId: {
-            date: logDate,
-            habitId,
-            userId: session.user.id
-          }
-        },
-        update: { value },
-        create: {
+    // 🌟 唔好做 if (value <= 0) 判斷
+    // 無論係 0 定係 100，一律用 upsert 確保資料庫有一條明確嘅紀錄
+    await prisma.habitLog.upsert({
+      where: {
+        date_habitId_userId: {
           date: logDate,
-          value,
           habitId,
           userId: session.user.id
         }
-      })
-    }
+      },
+      update: { value },
+      create: {
+        date: logDate,
+        value,
+        habitId,
+        userId: session.user.id
+      }
+    })
 
     revalidatePath("/")
     return { success: true }
@@ -243,9 +233,6 @@ export async function logHabitProgress(habitId: string, date: Date, value: numbe
 }
 
 
-// ==============================
-// 4. 社交與分享功能
-// ==============================
 
 // ==============================
 // 4. 社交與分享功能
