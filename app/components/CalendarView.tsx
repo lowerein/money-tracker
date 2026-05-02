@@ -10,7 +10,8 @@ interface CalendarViewProps {
   selectedDay: number;
   viewUserIds: string[];
   sharedUsers: any[];
-  currentUser: any;
+  currentUser: { id: string; name: string | null };
+  notesDates?: string[]; // 🌟 已加入
 }
 
 export default async function CalendarView({
@@ -21,6 +22,7 @@ export default async function CalendarView({
   viewUserIds,
   sharedUsers,
   currentUser,
+  notesDates = [], // 🌟 預設空陣列
 }: CalendarViewProps) {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
@@ -57,7 +59,6 @@ export default async function CalendarView({
     >,
   );
 
-  // 🌟 改變整理結構：儲存 { emoji, name } 而唔係單純 string
   const dailyHabits = habitLogs.reduce(
     (acc, log) => {
       const d = new Date(log.date);
@@ -147,6 +148,7 @@ export default async function CalendarView({
             today.getDate() === day;
           const viewQuery =
             viewUserIds.length > 0 ? `&view=${viewUserIds.join(",")}` : "";
+          
           return (
             <Link
               key={day}
@@ -157,16 +159,25 @@ export default async function CalendarView({
               `}
             >
               <div className="flex justify-between items-start w-full">
-                <span
-                  className={`text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-full shrink-0
-                  ${isToday ? "bg-blue-600 text-white" : "text-gray-400 dark:text-gray-500"}
-                  ${isSelected && !isToday ? "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800" : ""}
-                `}
-                >
-                  {day}
-                </span>
+                
+                {/* 🌟 呢度包住咗日子數字同埋筆記圖示 */}
+                <div className="flex items-start gap-1">
+                  <span
+                    className={`text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-full shrink-0
+                    ${isToday ? "bg-blue-600 text-white" : "text-gray-400 dark:text-gray-500"}
+                    ${isSelected && !isToday ? "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-800" : ""}
+                  `}
+                  >
+                    {day}
+                  </span>
+                  
+                  {/* 🌟 如果呢日有筆記，就顯示 📝 圖示 */}
+                  {notesDates.includes(dateStr) && (
+                    <span className="text-[10px] mt-0.5" title="今日有筆記">📝</span>
+                  )}
+                </div>
 
-                {/* 🌟 替換為 HabitPopover */}
+                {/* 替換為 HabitPopover */}
                 {userIdsWithHabits.length > 0 && (
                   <div className="flex flex-col items-end gap-0.5 max-h-[40px] overflow-hidden">
                     {userIdsWithHabits.slice(0, 3).map((uid) => (

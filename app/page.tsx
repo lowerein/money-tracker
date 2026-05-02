@@ -10,6 +10,7 @@ import Dashboard from "./components/Dashboard";
 import CalendarView from "./components/CalendarView";
 import { ThemeToggle } from "./components/ThemeToggle";
 import HabitTracker from "./components/HabitTracker";
+import DailyNotepad from "./components/DailyNotepad";
 import SettingsManager from "./components/SettingsManager";
 import StatsModal from "./components/StatsModal";
 
@@ -64,7 +65,8 @@ export default async function Home({
 
   // 決定用於 HabitTracker 的特定日期字串
   // 如果選了全月(day=0)，HabitTracker 預設顯示 1 號或是今天
-  const habitDay = selectedDay > 0 ? selectedDay : (year === hkY && month === hkM - 1 ? hkD : 1);
+  const habitDay =
+    selectedDay > 0 ? selectedDay : year === hkY && month === hkM - 1 ? hkD : 1;
   const targetDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(habitDay).padStart(2, "0")}`;
   const targetDate = getSafeDBDate(targetDateStr);
 
@@ -84,8 +86,32 @@ export default async function Home({
   let sharedUsers: any[] = [];
   let sharedByMe: any[] = [];
   let viewUserIds: string[] = [];
+  let dailyNote: any;
+  let monthNotes: any[] = [];
 
   if (session?.user?.id) {
+    // 1. 讀取當天筆記
+    dailyNote = await prisma.dailyNote.findUnique({
+      where: {
+        userId_date: {
+          userId: session.user.id,
+          date: targetDate,
+        },
+      },
+    });
+
+    // 2. 為了讓 CalendarView 顯示筆記圖示，讀取當月所有筆記
+    monthNotes = await prisma.dailyNote.findMany({
+      where: {
+        userId: session.user.id,
+        date: {
+          gte: new Date(year, month, 1),
+          lte: new Date(year, month + 1, 0),
+        },
+      },
+      select: { date: true }, // 只需要日期來顯示圖示
+    });
+
     // A. 分類與習慣 (按 order 排序)
     categories = await prisma.category.findMany({
       where: { userId: session.user.id },
@@ -115,7 +141,9 @@ export default async function Home({
     viewUserIds = viewParam ? viewParam.split(",") : [session.user.id];
 
     // C. 獲取選中日期的打卡記錄 (精準 24 小時範圍)
-    const targetDateEnd = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const targetDateEnd = new Date(
+      targetDate.getTime() + 24 * 60 * 60 * 1000 - 1,
+    );
     currentDayLogs = await prisma.habitLog.findMany({
       where: {
         userId: session.user.id,
@@ -124,12 +152,13 @@ export default async function Home({
     });
   }
 
-  const selectedCats = resolvedSearchParams.cat ? resolvedSearchParams.cat.split(",") : [];
+  const selectedCats = resolvedSearchParams.cat
+    ? resolvedSearchParams.cat.split(",")
+    : [];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-10 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
-        
         {/* --- Header 頂部欄 --- */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div className="flex items-center justify-between md:justify-start w-full md:w-auto gap-4">
@@ -158,8 +187,15 @@ export default async function Home({
                     {session.user.name}
                   </span>
                   <div className="w-px h-4 bg-gray-200 dark:bg-gray-600"></div>
-                  <form action={async () => { "use server"; await signOut(); }}>
-                    <button className="text-xs text-red-500 hover:text-red-400 font-bold">登出</button>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut();
+                    }}
+                  >
+                    <button className="text-xs text-red-500 hover:text-red-400 font-bold">
+                      登出
+                    </button>
                   </form>
                 </div>
               </div>
@@ -169,25 +205,30 @@ export default async function Home({
 
         {session?.user ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-            
             {/* --- 左邊欄：Dashboard 與 習慣打卡 --- */}
             <div className="xl:col-span-1 space-y-8">
-              <Dashboard userId={session.user.id!} year={year} month={month} />
+              {/* --- 左邊欄：Dashboard、記帳、習慣、記事 --- */}
+              <div className="xl:col-span-1 space-y-8">
+                <Dashboard
+                  userId={session.user.id!}
+                  year={year}
+                  month={month}
+                />
 
-              <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
-                <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">
-                  快速記帳
-                </h3>
-                <ExpenseForm categories={categories} />
+                <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 transition-colors">
+                  <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4">
+                    快速記帳
+                  </h3>
+                  <ExpenseForm categories={categories} />
+                </div>
+
+                <HabitTracker
+                  habits={habits}
+                  initialLogs={currentDayLogs}
+                  targetDate={targetDate}
+                  dateStr={targetDateStr}
+                />
               </div>
-
-              {/* 習慣打卡組件：傳入鎖定的 targetDate 與 dateStr */}
-              <HabitTracker
-                habits={habits}
-                initialLogs={currentDayLogs}
-                targetDate={targetDate}
-                dateStr={targetDateStr}
-              />
             </div>
 
             {/* --- 右邊欄：月曆與清單 --- */}
@@ -221,7 +262,10 @@ export default async function Home({
                 selectedDay={selectedDay}
                 viewUserIds={viewUserIds}
                 sharedUsers={sharedUsers}
-                currentUser={{ id: session.user.id, name: session.user.name }}
+                notesDates={monthNotes.map(
+                  (n) => n.date.toISOString().split("T")[0],
+                )}
+                currentUser={{ id: session.user.id!, name: session.user.name! }}
               />
 
               {/* 帳目列表 */}
@@ -251,17 +295,30 @@ export default async function Home({
                   selectedCats={selectedCats}
                 />
               </div>
+
+              <DailyNotepad
+                initialContent={dailyNote?.content || ""}
+                targetDate={targetDate}
+                dateStr={targetDateStr}
+              />
             </div>
           </div>
         ) : (
           /* --- 未登入介面 --- */
           <div className="max-w-md mx-auto text-center py-20 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 mt-20 transition-colors">
             <div className="text-6xl mb-6">🎯</div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">掌控你的人生與財富</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              掌控你的人生與財富
+            </h2>
             <p className="text-gray-500 dark:text-gray-400 mb-8 px-10">
               登入以開始追蹤每日好習慣與開支，透過數據分析成就更好的自己。
             </p>
-            <form action={async () => { "use server"; await signIn("google"); }}>
+            <form
+              action={async () => {
+                "use server";
+                await signIn("google");
+              }}
+            >
               <button className="px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-bold transition-all shadow-lg shadow-blue-200">
                 使用 Google 帳號登入
               </button>

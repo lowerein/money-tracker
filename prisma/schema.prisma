@@ -58,6 +58,8 @@ model User {
 
   sharedByMe    ShareAccess[] @relation("SharedByMe")
   sharedWithMe  ShareAccess[] @relation("SharedWithMe")
+
+  dailyNotes    DailyNote[]
 }
 
 model VerificationToken {
@@ -147,4 +149,17 @@ model ShareAccess {
   createdAt DateTime @default(now())
 
   @@unique([ownerId, guestId]) // 確保唔會重複邀請同一個人
+}
+
+model DailyNote {
+  id        String   @id @default(cuid())
+  date      DateTime // 儲存該筆記的日期 (我們會鎖定 UTC 00:00:00)
+  content   String   @db.Text
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date]) // 確保一人一天只有一條筆記
+  @@index([userId, date])
 }
