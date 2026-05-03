@@ -109,7 +109,7 @@ export default async function Home({
           lte: new Date(year, month + 1, 0),
         },
       },
-      select: { date: true }, // 只需要日期來顯示圖示
+      orderBy: { date: "asc" }, // 🌟 順住日子排
     });
 
     // A. 分類與習慣 (按 order 排序)
@@ -300,6 +300,7 @@ export default async function Home({
                 initialContent={dailyNote?.content || ""}
                 targetDate={targetDate}
                 dateStr={targetDateStr}
+                monthNotes={monthNotes} // 🌟 加多呢行傳遞資料
               />
             </div>
           </div>
